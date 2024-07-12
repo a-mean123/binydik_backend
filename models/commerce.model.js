@@ -58,6 +58,10 @@ const commerceSchema = new mongoose.Schema({
         type: Array,
         default: []
     },
+    pricingList: {
+        type: Array,
+        default: []
+    },
     video: {
         type: String,
         default: ''

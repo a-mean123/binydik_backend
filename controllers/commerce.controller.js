@@ -7,7 +7,10 @@ const MainCategorie = require('../models/maincategorie.model');
 const SubCategorie = require('../models/subcategorie.model');
 const Facilitie = require('../models/facilitie.model');
 const { default: mongoose } = require('mongoose');
+const jwt = require('jsonwebtoken');
 
+
+// for admin with full access
 const createCommerce = async (req, res) => {
 
     try {
@@ -19,6 +22,7 @@ const createCommerce = async (req, res) => {
 
         const mainImage = req.files['image'] ? req.files['image'][0].filename : null;
         const gallery = req.files['gallery'] ? req.files['gallery'].map(file => file.filename) : [];
+        const pricingList = req.files['pricingList'] ? req.files['pricingList'].map(file => file.filename) : [];
 
         const commerce = new Commerce({
             title,
@@ -41,7 +45,58 @@ const createCommerce = async (req, res) => {
             keywords: JSON.parse(keywords),
             openingHours: JSON.parse(openingHours),
             image: mainImage,
-            gallery
+            gallery,
+            pricingList
+        });
+
+        let savedCommerce = await commerce.save();
+        res.status(200).send(savedCommerce);
+
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+
+}
+
+// for commercial with minm access
+
+const createMyCommerce = async (req, res) => {
+
+    try {
+        const user = await jwt.verify(req.headers.authorization.split(' ')[1], process.env.SECRET_KEY_USER);
+        const {
+            title, slog, description, maincategorie, subcategorie,
+            city, address, state, zip, email, phone, website,
+            facebook, twitter, linkedin, facilities, keywords, openingHours
+        } = req.body;
+
+        const mainImage = req.files['image'] ? req.files['image'][0].filename : null;
+        const gallery = req.files['gallery'] ? req.files['gallery'].map(file => file.filename) : [];
+        const pricingList = req.files['pricingList'] ? req.files['pricingList'].map(file => file.filename) : [];
+
+        const commerce = new Commerce({
+            title,
+            slog,
+            owner: user.id,
+            description,
+            maincategorie,
+            subcategorie,
+            city,
+            address,
+            state,
+            zip,
+            email,
+            phone,
+            website,
+            facebook,
+            twitter,
+            linkedin,
+            facilities: JSON.parse(facilities),
+            keywords: JSON.parse(keywords),
+            openingHours: JSON.parse(openingHours),
+            image: mainImage,
+            gallery,
+            pricingList
         });
 
         let savedCommerce = await commerce.save();
@@ -85,7 +140,7 @@ const existSlog = async (req, res) => {
 
 const getPaginatedCommerces = async (req, res) => {
     try {
-        const { page = 1, limit = 10, search = '', location = '', category = '', subcategories = '', facilities = '' } = req.query;
+        const { page = 1, limit = 12, search = '', location = '', category = '', subcategories = '', facilities = '' } = req.query;
 
 
         // Parse the subcategories and facilities from the query string into arrays
@@ -181,6 +236,7 @@ const getPaginatedCommerces = async (req, res) => {
 };
 
 
+// for admin with full access
 const getPagePendingCommerces = async (req, res) => {
 
     try {
@@ -482,6 +538,313 @@ const getPageArchivedCommerces = async (req, res) => {
 }
 
 
+// for commercial
+
+const getMyPagePendingCommerces = async (req, res) => {
+
+    try {
+        const user = await jwt.verify(req.headers.authorization.split(' ')[1], process.env.SECRET_KEY_USER);
+        let { page } = req.params;
+        let startIndex = (page - 1) * 10;
+        let result = await Commerce.aggregate([
+            { $match: { status: 'pending', owner: mongoose.Types.ObjectId(user.id) } },
+            { $sort: { eid: 1, modifyDate: 1 } },
+            { $skip: startIndex },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: 'maincategories',
+                    localField: 'maincategorie',
+                    foreignField: '_id',
+                    as: 'maincategorie'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'subcategories',
+                    localField: 'subcategorie',
+                    foreignField: '_id',
+                    as: 'subcategorie'
+                }
+            }
+            ,
+            {
+                $lookup: {
+                    from: 'facilities',
+                    localField: 'facilities',
+                    foreignField: '_id',
+                    as: 'facilities'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'owner',
+                    foreignField: '_id',
+                    as: 'owner'
+                }
+            },
+            {
+                $unwind: '$owner'
+            },
+            {
+                $project: {
+                    title: 1,
+                    slog: 1,
+                    description: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    maincategorie: 1,
+                    subcategorie: 1,
+                    facilities: 1,
+                    keywords: 1,
+                    image: 1,
+                    gallery: 1,
+                    video: 1,
+                    city: 1,
+                    address: 1,
+                    state: 1,
+                    zip: 1,
+                    email: 1,
+                    website: 1,
+                    phone: 1,
+                    facebook: 1,
+                    twitter: 1,
+                    linkedin: 1,
+                    status: 1,
+                    featured: 1,
+                    archived: 1,
+                    public: 1,
+                    averageRating: 1,
+                    openingHours: 1,
+                    owner: {
+                        fullname: 1,
+                        image: 1,
+                        email: 1,
+                        ville: 1
+                    }
+                }
+            }
+        ])
+
+
+        res.status(200).json({
+            commerces: result,
+            page: page,
+            total: await Commerce.count({ status: 'pending' })
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(400).json({ error: error.message });
+    }
+
+}
+
+const getMyPageActiveCommerces = async (req, res) => {
+
+    try {
+        const user = await jwt.verify(req.headers.authorization.split(' ')[1], process.env.SECRET_KEY_USER);
+
+        let { page } = req.params;
+        let startIndex = (page - 1) * 10;
+        let result = await Commerce.aggregate([
+            { $match: { status: 'active', owner: mongoose.Types.ObjectId(user.id) } },
+            { $sort: { eid: 1, modifyDate: 1 } },
+            { $skip: startIndex },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: 'maincategories',
+                    localField: 'maincategorie',
+                    foreignField: '_id',
+                    as: 'maincategorie'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'subcategories',
+                    localField: 'subcategorie',
+                    foreignField: '_id',
+                    as: 'subcategorie'
+                }
+            }
+            ,
+            {
+                $lookup: {
+                    from: 'facilities',
+                    localField: 'facilities',
+                    foreignField: '_id',
+                    as: 'facilities'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'owner',
+                    foreignField: '_id',
+                    as: 'owner'
+                }
+            },
+            {
+                $unwind: '$owner'
+            },
+            {
+                $project: {
+                    title: 1,
+                    slog: 1,
+                    description: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    maincategorie: 1,
+                    subcategorie: 1,
+                    facilities: 1,
+                    keywords: 1,
+                    image: 1,
+                    gallery: 1,
+                    video: 1,
+                    city: 1,
+                    address: 1,
+                    state: 1,
+                    zip: 1,
+                    email: 1,
+                    website: 1,
+                    phone: 1,
+                    facebook: 1,
+                    twitter: 1,
+                    linkedin: 1,
+                    status: 1,
+                    featured: 1,
+                    archived: 1,
+                    public: 1,
+                    averageRating: 1,
+                    openingHours: 1,
+                    owner: {
+                        fullname: 1,
+                        image: 1,
+                        email: 1,
+                        ville: 1
+                    }
+                }
+            }
+        ])
+
+
+        res.status(200).json({
+            commerces: result,
+            page: page,
+            total: await Commerce.count({ status: 'active' })
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(400).json({ error: error.message });
+    }
+
+}
+
+const getMyPageArchivedCommerces = async (req, res) => {
+
+    try {
+        const user = await jwt.verify(req.headers.authorization.split(' ')[1], process.env.SECRET_KEY_USER);
+
+        let { page } = req.params;
+        let startIndex = (page - 1) * 10;
+        let result = await Commerce.aggregate([
+            { $match: { status: 'archived' , owner: mongoose.Types.ObjectId(user.id)} },
+            { $sort: { eid: 1, modifyDate: 1 } },
+            { $skip: startIndex },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: 'maincategories',
+                    localField: 'maincategorie',
+                    foreignField: '_id',
+                    as: 'maincategorie'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'subcategories',
+                    localField: 'subcategorie',
+                    foreignField: '_id',
+                    as: 'subcategorie'
+                }
+            }
+            ,
+            {
+                $lookup: {
+                    from: 'facilities',
+                    localField: 'facilities',
+                    foreignField: '_id',
+                    as: 'facilities'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'owner',
+                    foreignField: '_id',
+                    as: 'owner'
+                }
+            },
+            {
+                $unwind: '$owner'
+            },
+            {
+                $project: {
+                    title: 1,
+                    slog: 1,
+                    description: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    maincategorie: 1,
+                    subcategorie: 1,
+                    facilities: 1,
+                    keywords: 1,
+                    image: 1,
+                    gallery: 1,
+                    video: 1,
+                    city: 1,
+                    address: 1,
+                    state: 1,
+                    zip: 1,
+                    email: 1,
+                    website: 1,
+                    phone: 1,
+                    facebook: 1,
+                    twitter: 1,
+                    linkedin: 1,
+                    status: 1,
+                    featured: 1,
+                    archived: 1,
+                    public: 1,
+                    averageRating: 1,
+                    openingHours: 1,
+                    owner: {
+                        fullname: 1,
+                        image: 1,
+                        email: 1,
+                        ville: 1
+                    }
+                }
+            }
+        ])
+
+
+        res.status(200).json({
+            commerces: result,
+            page: page,
+            total: await Commerce.count({ status: 'archived' })
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(400).json({ error: error.message });
+    }
+
+}
+
 
 
 const getPageCommercesClient = async (req, res) => {
@@ -781,6 +1144,7 @@ const getCommerceBySlog = async (req, res) => {
                     keywords: 1,
                     image: 1,
                     gallery: 1,
+                    pricingList: 1,
                     city: 1,
                     address: 1,
                     state: 1,
@@ -1082,11 +1446,15 @@ const getRecentCommerces = async (req, res) => {
 
 module.exports = {
     createCommerce,
+    createMyCommerce,
     existSlog,
     getPaginatedCommerces,
     getPageActiveCommerces,
     getPageArchivedCommerces,
     getPagePendingCommerces,
+    getMyPageActiveCommerces,
+    getMyPageArchivedCommerces,
+    getMyPagePendingCommerces,
     getPageCommercesClient,
     getCommercesTitles,
     getCommerceByCategorie,

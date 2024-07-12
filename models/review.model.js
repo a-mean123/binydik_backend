@@ -18,13 +18,38 @@ const reviewSchema = new mongoose.Schema({
         type: Date,
         default: new Date()
     },
-    review: {
+
+    location: {
         type: Number,
-        require: true
+        required: true
+    },
+    cleanliness: {
+        type: Number,
+        required: true
+    },
+    service: {
+        type: Number,
+        required: true
     },
     comment: {
         type: String,
         require: false
+    },
+    likes: {
+        type: Number,
+        default: 0
+    },
+    dislikes: {
+        type: Number,
+        default: 0
+    },
+    likedBy: {
+        type: [ObjectId],
+        default: []
+    },
+    dislikedBy: {
+        type: [ObjectId],
+        default: []
     }
 
 })

@@ -6,6 +6,7 @@ const getWishlistByUserId = async (req, res) => {
     try {
         const userId = req.params.userId;
         console.log(userId);
+
         let result = await Wishlist.aggregate([
             { $match: { userId: mongoose.Types.ObjectId(userId) } },
             { $unwind: '$items' },
@@ -81,7 +82,7 @@ const getWishlistByUserId = async (req, res) => {
         ]);
 
         console.log('fffffffffffffffffffffff', result[0]);
-        res.status(200).json(result[0]);
+        res.status(200).json(result[0] || { items: [] });
 
     } catch (error) {
         res.status(500).json({ message: error.message });
